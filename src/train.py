@@ -22,8 +22,11 @@ class ProjectAgent:
     def __init__(self):
 
         # whether to train and save new model or just load an existing model (models/model.pkl)
-        self.new = False            
-        if( len(sys.argv) > 1 ):        # training a new model is specified through a command line argument: python3 main.py new
+        self.new = False                
+        self.path = "./src/models/model.pkl"           # path to the "default" model
+
+        # training a new model is specified through a command line argument: python3 main.py new
+        if( len(sys.argv) > 1 ):        
             if sys.argv[1] == "new":
                 self.new = True
 
@@ -31,16 +34,14 @@ class ProjectAgent:
         self.gamma = 0.98                           # discount factor
         self.nb_actions = env.action_space.n        # number of actions
 
-         # if not training a new model, check if the "default" model exists
-        if not self.new:                       
-            if not os.path.exists( "./models/model.pkl" ):
-                self.train = True
-            else:
-                self.path = "./models/model.pkl"
+        # if the "default" model does not exist, train a new model
+        if not self.new and not os.path.exists( self.path ):
+            print("No model found. Training a new model.")
+            self.new = True
         
         if self.new:
             timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")       # time stamp to avoid overwriting models
-            self.path = "./models/{}_{}.pkl".format(self.algorithm, timestamp)
+            self.path = "./src/models/{}_{}.pkl".format(self.algorithm, timestamp)
             self.train()
             self.save(self.path)
 
