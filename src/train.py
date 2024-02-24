@@ -46,6 +46,7 @@ class ProjectAgent:
         self.algorithm = "DQNtarget"               
         self.new = False                    # whether to train and save new model or just load an existing model (models/model.<extension>)
         self.path = "./src/models/model.pt" # path to default model
+        self.path = './src/models/DQNtarget_20240224-163404.pt'
 
         self.n_actions = env.action_space.n             # number of actions
         self.state_dim = env.observation_space.shape[0] # state space dimension
@@ -71,12 +72,23 @@ class ProjectAgent:
         if self.new:
             timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")       # time stamp to avoid overwriting models
             self.path = "./src/models/{}_{}.pt".format(self.algorithm, timestamp)
-            scores = self.train()
-            plt.plot(scores)
+            ep_length, disc_rewards, tot_rewards, V0 = self.train()
             self.save(self.path)
 
+            plt.figure()
+            plt.plot(ep_length, label="training episode length")
+            plt.plot(tot_rewards, label="MC eval of total reward")
+            plt.legend()
+            plt.savefig(self.path+'-fig1.png')
 
-    def network(self, nb_neurons=24):
+            plt.figure()
+            plt.plot(disc_rewards, label="MC eval of discounted reward")
+            plt.plot(V0, label="average $max_a Q(s_0)$")
+            plt.legend()
+            plt.savefig(self.path+'-fig2.png')
+
+            
+    def network(self, nb_neurons=300):
         """
         Neural Network architecture for DQN.
         """
@@ -86,6 +98,7 @@ class ProjectAgent:
                                   nn.ReLU(), 
                                   nn.Linear(nb_neurons, self.n_actions)).to(self.device)
         return DQN
+
     
     def greedy_action(self, network, state):
         """
