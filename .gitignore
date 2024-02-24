@@ -1,7 +1,8 @@
 src/__pycache__/
+src/train_*.py
 # ignore all models except the one to be tested
 src/models/*            
-!src/models/model.pkl   
+!src/models/model* 
 historic.md
 
 # Byte-compiled / optimized / DLL files

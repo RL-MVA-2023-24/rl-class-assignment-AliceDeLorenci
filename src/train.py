@@ -1,13 +1,14 @@
-from gymnasium.wrappers import TimeLimit
-from env_hiv import HIVPatient
-
+import random
+import torch
+import torch.nn as nn
+import numpy as np
 import sys
 import os
 import datetime
-import pickle
+import matplotlib.pyplot as plt
 
-import FQI as FQI
-import utils as utils
+from gymnasium.wrappers import TimeLimit
+from env_hiv import HIVPatient
 
 env = TimeLimit(
     env=HIVPatient(domain_randomization=False), max_episode_steps=200
@@ -19,57 +20,95 @@ env = TimeLimit(
 # Don't modify the methods names and signatures, but you can add methods.
 # ENJOY!
 class ProjectAgent:
+
+    class ReplayBuffer:
+        """
+        Class for storing and sampling experience samples.
+        """
+        def __init__(self, capacity, device):
+            self.capacity = capacity # capacity of the buffer
+            self.data = []
+            self.index = 0 # index of the next cell to be filled
+            self.device = device
+        def append(self, s, a, r, s_, d):
+            if len(self.data) < self.capacity:
+                self.data.append(None)
+            self.data[self.index] = (s, a, r, s_, d)
+            self.index = (self.index + 1) % self.capacity
+        def sample(self, batch_size):
+            batch = random.sample(self.data, batch_size)
+            return list(map(lambda x:torch.Tensor(np.array(x)).to(self.device), list(zip(*batch))))
+        def __len__(self):
+            return len(self.data)
+
+    def act(self, observation, use_random=False):
+        with torch.no_grad():
+            Q = self.model(torch.Tensor(observation).unsqueeze(0).to(self.device))
+            return torch.argmax(Q).item()
+
+    def save(self, path):
+        print("Saving model to", path)
+        torch.save(self.model.state_dict(), self.path)
+
+    def load(self):
+        self.device = self.test_device
+
+        print("Loading model from", self.path)
+        self.model = self.network()
+        self.model.load_state_dict(torch.load(self.path, map_location=self.device))
+        self.model.eval()
+    
     def __init__(self):
+        print("Initializing agent")
 
-        # whether to train and save new model or just load an existing model (models/model.pkl)
-        self.new = False                
-        self.path = "./src/models/model.pkl"           # path to the "default" model
+        #### INSTANCE ATTRIBUTES ####
+        self.algorithm = "DQN"               
+        self.new = False                    # whether to train and save new model or just load an existing model (models/model.<extension>)
+        self.path = "./src/models/model.pt" # path to default model
 
+        self.n_actions = env.action_space.n             # number of actions
+        self.state_dim = env.observation_space.shape[0] # state space dimension
+
+        self.model = None                               # Q-network
+        self.device = None
+        self.train_device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # device to use for training
+        self.test_device = torch.device("cpu")                                           # device to use for evaluation
+        #############################
+
+        
         # training a new model is specified through a command line argument: python3 main.py new
         if( len(sys.argv) > 1 ):        
             if sys.argv[1] == "new":
                 self.new = True
-
-        self.algorithm = "FQI"                      # RL algorithm to train (only relevant if training a new model)
-        self.gamma = 0.98                           # discount factor
-        self.nb_actions = env.action_space.n        # number of actions
 
         # if the "default" model does not exist, train a new model
         if not self.new and not os.path.exists( self.path ):
             print("No model found. Training a new model.")
             self.new = True
         
+        # train new model
         if self.new:
             timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")       # time stamp to avoid overwriting models
-            self.path = "./src/models/{}_{}.pkl".format(self.algorithm, timestamp)
-            self.train()
+            self.path = "./src/models/{}_{}.pt".format(self.algorithm, timestamp)
+            scores = self.train()
+            plt.plot(scores)
             self.save(self.path)
 
-            
-    def train(self):
+    def network(self, nb_neurons=24):
         """
-        Train the agent. And save model to self.model
+        Neural Network architecture for DQN.
         """
-        if self.algorithm == "FQI":
-            # The first step is to collect and store a dataset of samples
-            S,A,R,S2,D = FQI.collect_samples(env, int(1e4))
-            print("nb of collected samples:", S.shape[0])
-
-            # Build the sequence of AVI Q-functions, learned using random forests
-            nb_iter = 10
-            Qfunctions = FQI.rf_fqi(S, A, R, S2, D, nb_iter, self.nb_actions, self.gamma)
-
-            # Save the last Q-function
-            self.model = Qfunctions[-1]
-
-    def act(self, observation, use_random=False):
-        a = utils.greedy_action(self.model, observation, self.nb_actions)
-        return a
-
-    def save(self, path):
-        with open(path, "wb") as f:
-            pickle.dump(self.model, f)
-
-    def load(self):
-        with open(self.path, "rb") as f:
-            self.model = pickle.load(f)
+        DQN = torch.nn.Sequential(nn.Linear(self.state_dim, nb_neurons),
+                                  nn.ReLU(),
+                                  nn.Linear(nb_neurons, nb_neurons),
+                                  nn.ReLU(), 
+                                  nn.Linear(nb_neurons, self.n_actions)).to(self.device)
+        return DQN
+    
+    def greedy_action(self, network, state):
+        """
+        Select the greedy action according to the Q-network.
+        """
+        with torch.no_grad():
+            Q = network(torch.Tensor(state).unsqueeze(0).to(self.device))
+            return torch.argmax(Q).item()
