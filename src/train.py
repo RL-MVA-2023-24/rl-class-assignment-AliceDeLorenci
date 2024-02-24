@@ -46,7 +46,6 @@ class ProjectAgent:
         self.algorithm = "DQNtarget"               
         self.new = False                    # whether to train and save new model or just load an existing model (models/model.<extension>)
         self.path = "./src/models/model.pt" # path to default model
-        self.path = './src/models/DQNtarget_20240224-163404.pt'
 
         self.n_actions = env.action_space.n             # number of actions
         self.state_dim = env.observation_space.shape[0] # state space dimension
