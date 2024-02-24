@@ -7,6 +7,8 @@ import os
 import datetime
 import matplotlib.pyplot as plt
 from copy import deepcopy
+import json
+import inspect
 
 from gymnasium.wrappers import TimeLimit
 from env_hiv import HIVPatient
@@ -54,13 +56,16 @@ class ProjectAgent:
         self.device = None
         self.train_device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # device to use for training
         self.test_device = torch.device("cpu")                                           # device to use for evaluation
-        #############################
-
         
-        # training a new model is specified through a command line argument: python3 main.py new
+        # command line argument specifies:
+        # - whether to train a new model: python3 main.py new
+        # - or to load an existing model: python3 main.py <file_name>
+        # otherwise, the default model is loaded
         if( len(sys.argv) > 1 ):        
             if sys.argv[1] == "new":
                 self.new = True
+            else:
+                self.path = './src/models/'+sys.argv[1]
 
         # if the "default" model does not exist, train a new model
         if not self.new and not os.path.exists( self.path ):
@@ -74,28 +79,37 @@ class ProjectAgent:
             ep_length, disc_rewards, tot_rewards, V0 = self.train()
             self.save(self.path)
 
+            self.config['network'] = self.network
+            self.save_setup(self.config, self.path)
+
             plt.figure()
             plt.plot(ep_length, label="training episode length")
-            plt.plot(tot_rewards, label="MC eval of total reward")
+            if self.config['monitoring_nb_trials']>0:
+                plt.plot(tot_rewards, label="MC eval of total reward")
             plt.legend()
             plt.savefig(self.path+'-fig1.png')
 
-            plt.figure()
-            plt.plot(disc_rewards, label="MC eval of discounted reward")
-            plt.plot(V0, label="average $max_a Q(s_0)$")
-            plt.legend()
-            plt.savefig(self.path+'-fig2.png')
+            if self.config['monitoring_nb_trials']>0:
+                plt.figure()
+                plt.plot(disc_rewards, label="MC eval of discounted reward")
+                plt.plot(V0, label="average $max_a Q(s_0)$")
+                plt.legend()
+                plt.savefig(self.path+'-fig2.png')
 
-            
-    def network(self, nb_neurons=300):
+    
+    def network(self, nb_neurons=[512, 512, 512]):
         """
         Neural Network architecture for DQN.
         """
-        DQN = torch.nn.Sequential(nn.Linear(self.state_dim, nb_neurons),
-                                  nn.ReLU(),
-                                  nn.Linear(nb_neurons, nb_neurons),
-                                  nn.ReLU(), 
-                                  nn.Linear(nb_neurons, self.n_actions)).to(self.device)
+        layers = []
+        layers.append(nn.Linear(self.state_dim, nb_neurons[0]))
+        layers.append(nn.ReLU())
+        for i in range(len(nb_neurons)-1):
+            layers.append(nn.Linear(nb_neurons[i], nb_neurons[i+1]))
+            layers.append(nn.ReLU())
+        layers.append(nn.Linear(nb_neurons[-1], self.n_actions))
+        DQN = nn.Sequential(*layers).to(self.device)
+        
         return DQN
 
     
