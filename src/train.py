@@ -56,6 +56,8 @@ class ProjectAgent:
         self.device = None
         self.train_device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # device to use for training
         self.test_device = torch.device("cpu")                                           # device to use for evaluation
+        #############################
+
         
         # command line argument specifies:
         # - whether to train a new model: python3 main.py new
@@ -67,7 +69,7 @@ class ProjectAgent:
             else:
                 self.path = './src/models/'+sys.argv[1]
 
-        # if the "default" model does not exist, train a new model
+        # if the model to load does not exist, train a new model
         if not self.new and not os.path.exists( self.path ):
             print("No model found. Training a new model.")
             self.new = True

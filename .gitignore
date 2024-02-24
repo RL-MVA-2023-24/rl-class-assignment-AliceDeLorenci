@@ -6,7 +6,7 @@ src/train_*.py
 src/models/*            
 !src/models/model* 
 # ignore scores
-# score*.txt
+score*.txt
 
 
 # Byte-compiled / optimized / DLL files
