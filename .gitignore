@@ -2,6 +2,7 @@ src/__pycache__/
 historic.md
 # ignore training code for now
 src/train_*.py
+src/main_*.py
 # ignore all models except the one to be tested
 src/models/*            
 !src/models/model* 
